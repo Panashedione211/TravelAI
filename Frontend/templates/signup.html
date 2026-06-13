@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Sign Up — TravelAI{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <div class="brand">
+      <h1>TravelAI</h1>
+      <p>Create your free account</p>
+    </div>
+
+    <form id="signup-form" class="auth-form">
+      <div id="error-msg" class="error-msg hidden"></div>
+
+      <label for="username">Username</label>
+      <input type="text" id="username" placeholder="travelbuddy" required />
+
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="you@example.com" required />
+
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="••••••••" required />
+
+      <button type="submit" class="btn-primary">Create Account</button>
+    </form>
+
+    <p class="auth-switch">
+      Already have an account? <a href="/login">Log in</a>
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById("signup-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("error-msg");
+    errorEl.classList.add("hidden");
+
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        email: document.getElementById("email").value,
+        password: document.getElementById("password").value,
+      }),
+    });
+
+    if (res.ok) {
+      window.location.href = "/login";
+    } else {
+      const err = await res.json();
+      errorEl.textContent = err.detail || "Registration failed.";
+      errorEl.classList.remove("hidden");
+    }
+  });
+</script>
+{% endblock %}

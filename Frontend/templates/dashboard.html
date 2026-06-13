@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — TravelAI{% endblock %}
+
+{% block content %}
+<div class="dashboard-wrapper">
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">TravelAI</div>
+    <nav>
+      <p class="sidebar-label">My Trips</p>
+      <ul id="trip-list">
+        <li class="trip-item-placeholder">No trips yet</li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="dashboard-main">
+    <header class="dashboard-header">
+      <span id="greeting">Welcome back!</span>
+      <button class="btn-logout" id="logout-btn">Log out</button>
+    </header>
+
+    <section class="dashboard-hero">
+      <h2>Where to next?</h2>
+      <p>Let AI plan your perfect trip in seconds.</p>
+      <a href="/questionnaire" class="btn-primary">Let's start planning</a>
+    </section>
+  </main>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const token = localStorage.getItem("token");
+  if (!token) window.location.href = "/login";
+
+  async function authFetch(url, options = {}) {
+    return fetch(url, {
+      ...options,
+      headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
+    });
+  }
+
+  async function loadUser() {
+    const res = await authFetch("/api/auth/me");
+    if (!res.ok) { window.location.href = "/login"; return; }
+    const user = await res.json();
+    document.getElementById("greeting").textContent = `Welcome back, ${user.username}!`;
+  }
+
+  async function loadTrips() {
+    const res = await authFetch("/api/trips/");
+    if (!res.ok) return;
+    const trips = await res.json();
+    const list = document.getElementById("trip-list");
+    if (trips.length === 0) return;
+    list.innerHTML = trips.map(t => `
+      <li class="trip-item">
+        <span>${t.destination}</span>
+        <small>${t.days} days · ${t.status}</small>
+      </li>
+    `).join("");
+  }
+
+  document.getElementById("logout-btn").addEventListener("click", () => {
+    localStorage.removeItem("token");
+    window.location.href = "/login";
+  });
+
+  loadUser();
+  loadTrips();
+</script>
+{% endblock %}

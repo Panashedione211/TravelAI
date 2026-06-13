@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Plan a Trip — TravelAI{% endblock %}
+
+{% block content %}
+<div class="questionnaire-wrapper">
+  <div class="questionnaire-card">
+
+    <div class="q-progress">
+      <span id="step-label">Step 1 of 6</span>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <form id="questionnaire-form">
+      <div id="error-msg" class="error-msg hidden"></div>
+
+      <!-- Step 1 -->
+      <div class="q-step active" data-step="1">
+        <h2>Where do you want to go?</h2>
+        <input type="text" id="destination" placeholder="e.g. Tokyo, Japan" required />
+      </div>
+
+      <!-- Step 2 -->
+      <div class="q-step" data-step="2">
+        <h2>How many days?</h2>
+        <input type="number" id="days" min="1" max="30" placeholder="e.g. 7" required />
+      </div>
+
+      <!-- Step 3 -->
+      <div class="q-step" data-step="3">
+        <h2>What is your budget?</h2>
+        <div class="option-grid">
+          <button type="button" class="option-btn" data-field="budget" data-value="budget">Budget</button>
+          <button type="button" class="option-btn" data-field="budget" data-value="mid-range">Mid-range</button>
+          <button type="button" class="option-btn" data-field="budget" data-value="luxury">Luxury</button>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="q-step" data-step="4">
+        <h2>What is your travel style?</h2>
+        <div class="option-grid">
+          <button type="button" class="option-btn" data-field="travel_style" data-value="hiking">Hiking</button>
+          <button type="button" class="option-btn" data-field="travel_style" data-value="food">Food</button>
+          <button type="button" class="option-btn" data-field="travel_style" data-value="road trip">Road Trip</button>
+          <button type="button" class="option-btn" data-field="travel_style" data-value="camping">Camping</button>
+          <button type="button" class="option-btn" data-field="travel_style" data-value="city">City</button>
+          <button type="button" class="option-btn" data-field="travel_style" data-value="family">Family</button>
+        </div>
+      </div>
+
+      <!-- Step 5 -->
+      <div class="q-step" data-step="5">
+        <h2>What pace do you want?</h2>
+        <div class="option-grid">
+          <button type="button" class="option-btn" data-field="pace" data-value="relaxed">Relaxed</button>
+          <button type="button" class="option-btn" data-field="pace" data-value="balanced">Balanced</button>
+          <button type="button" class="option-btn" data-field="pace" data-value="packed">Packed</button>
+        </div>
+      </div>
+
+      <!-- Step 6 -->
+      <div class="q-step" data-step="6">
+        <h2>Who is going?</h2>
+        <div class="option-grid">
+          <button type="button" class="option-btn" data-field="group_type" data-value="solo">Solo</button>
+          <button type="button" class="option-btn" data-field="group_type" data-value="couple">Couple</button>
+          <button type="button" class="option-btn" data-field="group_type" data-value="friends">Friends</button>
+          <button type="button" class="option-btn" data-field="group_type" data-value="family">Family</button>
+        </div>
+      </div>
+
+      <div class="q-nav">
+        <button type="button" id="back-btn" class="btn-secondary hidden">Back</button>
+        <button type="button" id="next-btn" class="btn-primary">Next</button>
+        <button type="submit" id="submit-btn" class="btn-primary hidden">Generate My Trip</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const token = localStorage.getItem("token");
+  if (!token) window.location.href = "/login";
+
+  const TOTAL = 6;
+  let current = 1;
+  const answers = {};
+
+  function showStep(n) {
+    document.querySelectorAll(".q-step").forEach(el => el.classList.remove("active"));
+    document.querySelector(`.q-step[data-step="${n}"]`).classList.add("active");
+    document.getElementById("step-label").textContent = `Step ${n} of ${TOTAL}`;
+    document.getElementById("progress-fill").style.width = `${(n / TOTAL) * 100}%`;
+    document.getElementById("back-btn").classList.toggle("hidden", n === 1);
+    document.getElementById("next-btn").classList.toggle("hidden", n === TOTAL);
+    document.getElementById("submit-btn").classList.toggle("hidden", n !== TOTAL);
+  }
+
+  document.querySelectorAll(".option-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const field = btn.dataset.field;
+      document.querySelectorAll(`[data-field="${field}"]`).forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      answers[field] = btn.dataset.value;
+    });
+  });
+
+  document.getElementById("next-btn").addEventListener("click", () => {
+    if (current < TOTAL) { current++; showStep(current); }
+  });
+
+  document.getElementById("back-btn").addEventListener("click", () => {
+    if (current > 1) { current--; showStep(current); }
+  });
+
+  document.getElementById("questionnaire-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("error-msg");
+    errorEl.classList.add("hidden");
+
+    const payload = {
+      destination: document.getElementById("destination").value,
+      days: parseInt(document.getElementById("days").value),
+      budget: answers.budget || "",
+      travel_style: answers.travel_style || "",
+      pace: answers.pace || "",
+      group_type: answers.group_type || "",
+    };
+
+    const res = await fetch("/api/trips/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      window.location.href = "/dashboard";
+    } else {
+      const err = await res.json();
+      errorEl.textContent = err.detail || "Something went wrong.";
+      errorEl.classList.remove("hidden");
+    }
+  });
+
+  showStep(1);
+</script>
+{% endblock %}

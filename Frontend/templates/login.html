@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Login — TravelAI{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <div class="brand">
+      <h1>TravelAI</h1>
+      <p>Your AI-powered travel planner</p>
+    </div>
+
+    <form id="login-form" class="auth-form">
+      <div id="error-msg" class="error-msg hidden"></div>
+
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="you@example.com" required />
+
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="••••••••" required />
+
+      <button type="submit" class="btn-primary">Let's Plan</button>
+    </form>
+
+    <p class="auth-switch">
+      Don't have an account? <a href="/signup">Sign up</a>
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("error-msg");
+    errorEl.classList.add("hidden");
+
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: document.getElementById("email").value,
+        password: document.getElementById("password").value,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem("token", data.access_token);
+      window.location.href = "/dashboard";
+    } else {
+      const err = await res.json();
+      errorEl.textContent = err.detail || "Login failed.";
+      errorEl.classList.remove("hidden");
+    }
+  });
+</script>
+{% endblock %}
