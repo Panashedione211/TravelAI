@@ -38,14 +38,16 @@
       <!-- Step 4 -->
       <div class="q-step" data-step="4">
         <h2>What is your travel style?</h2>
-        <div class="option-grid">
-          <button type="button" class="option-btn" data-field="travel_style" data-value="hiking">Hiking</button>
-          <button type="button" class="option-btn" data-field="travel_style" data-value="food">Food</button>
-          <button type="button" class="option-btn" data-field="travel_style" data-value="road trip">Road Trip</button>
-          <button type="button" class="option-btn" data-field="travel_style" data-value="camping">Camping</button>
-          <button type="button" class="option-btn" data-field="travel_style" data-value="city">City</button>
-          <button type="button" class="option-btn" data-field="travel_style" data-value="family">Family</button>
+        <p class="q-hint">Pick all that apply</p>
+        <div class="option-grid" id="travel-style-grid">
+          <button type="button" class="option-btn multi" data-field="travel_style" data-value="hiking">Hiking</button>
+          <button type="button" class="option-btn multi" data-field="travel_style" data-value="food">Food</button>
+          <button type="button" class="option-btn multi" data-field="travel_style" data-value="road trip">Road Trip</button>
+          <button type="button" class="option-btn multi" data-field="travel_style" data-value="camping">Camping</button>
+          <button type="button" class="option-btn multi" data-field="travel_style" data-value="city">City</button>
+          <button type="button" class="option-btn multi" data-field="travel_style" data-value="other">Other</button>
         </div>
+        <input type="text" id="travel-style-other" class="hidden" placeholder="e.g. wellness, photography..." />
       </div>
 
       <!-- Step 5 -->
@@ -99,13 +101,40 @@
     document.getElementById("submit-btn").classList.toggle("hidden", n !== TOTAL);
   }
 
+  const travelStyleSelected = new Set();
+
   document.querySelectorAll(".option-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const field = btn.dataset.field;
-      document.querySelectorAll(`[data-field="${field}"]`).forEach(b => b.classList.remove("selected"));
-      btn.classList.add("selected");
-      answers[field] = btn.dataset.value;
+
+      if (field === "travel_style") {
+        btn.classList.toggle("selected");
+        const val = btn.dataset.value;
+        if (val === "other") {
+          const otherInput = document.getElementById("travel-style-other");
+          otherInput.classList.toggle("hidden", !btn.classList.contains("selected"));
+        }
+        if (travelStyleSelected.has(val)) {
+          travelStyleSelected.delete(val);
+        } else {
+          travelStyleSelected.add(val);
+        }
+        const styles = [...travelStyleSelected].filter(v => v !== "other");
+        const otherText = document.getElementById("travel-style-other").value.trim();
+        if (travelStyleSelected.has("other") && otherText) styles.push(otherText);
+        answers.travel_style = styles.join(", ");
+      } else {
+        document.querySelectorAll(`[data-field="${field}"]`).forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        answers[field] = btn.dataset.value;
+      }
     });
+  });
+
+  document.getElementById("travel-style-other").addEventListener("input", (e) => {
+    const styles = [...travelStyleSelected].filter(v => v !== "other");
+    if (e.target.value.trim()) styles.push(e.target.value.trim());
+    answers.travel_style = styles.join(", ");
   });
 
   document.getElementById("next-btn").addEventListener("click", () => {

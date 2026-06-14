@@ -1,14 +1,14 @@
 # TravelAI ✈️
 
-An AI-powered travel planning app that generates personalized itineraries and interactive maps based on your travel preferences.
+An AI-powered travel planning app that generates personalized itineraries and interactive maps based on your travel preferences. Built for a Microsoft hackathon using Azure AI Foundry.
 
 ## How It Works
 
 1. Sign up and log in
-2. Answer 6 quick questions about your trip
-3. AI generates a personalized itinerary
-4. View your plan on an interactive map with numbered pinpoints
-5. Use the AI chatbox to tweak the plan
+2. Answer 6 quick questions about your trip (destination, days, budget, travel style, pace, group type)
+3. Azure AI generates a personalized day-by-day itinerary
+4. View your plan on an interactive map with color-coded pins per day
+5. Use the AI chat box to tweak the plan — changes update the map and itinerary in real time
 
 ## Tech Stack
 
@@ -16,9 +16,11 @@ An AI-powered travel planning app that generates personalized itineraries and in
 |-------|-----------|
 | Frontend | HTML, CSS, JavaScript, Leaflet.js |
 | Backend | Python, FastAPI |
-| Database | SQLite |
-| AI | Microsoft Foundry |
-| Maps | OpenStreetMap |
+| Database | SQLite via SQLAlchemy |
+| AI | Azure AI Foundry (gpt-4.1-mini) |
+| Maps | Leaflet.js + OpenStreetMap |
+| Geocoding | OpenStreetMap Nominatim |
+| Auth | JWT via python-jose + passlib |
 
 ## Project Structure
 
@@ -30,9 +32,11 @@ TravelAI/
 │   ├── models.py             # Database tables (User, Trip, ItineraryStop)
 │   ├── schemas.py            # Request/response data shapes
 │   ├── auth_utils.py         # JWT and password hashing
+│   ├── foundry.py            # Azure AI Foundry integration + Nominatim geocoding
 │   └── routers/
 │       ├── auth.py           # Register, login, me
-│       └── trips.py          # Trip CRUD and stops
+│       ├── trips.py          # Trip CRUD and stops
+│       └── itinerary.py      # AI generation and chat update endpoints
 ├── Frontend/
 │   ├── static/
 │   │   ├── css/style.css
@@ -42,7 +46,8 @@ TravelAI/
 │       ├── login.html
 │       ├── signup.html
 │       ├── dashboard.html
-│       └── questionnaire.html
+│       ├── questionnaire.html
+│       └── trip_detail.html  # Map + itinerary + chat
 └── .gitignore
 ```
 
@@ -74,7 +79,14 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and set your own `SECRET_KEY`.
+Edit `.env` with your values:
+
+```
+SECRET_KEY=your-secret-key
+FOUNDRY_API_KEY=your-azure-api-key
+FOUNDRY_ENDPOINT=https://your-resource.services.ai.azure.com/openai/v1/chat/completions
+FOUNDRY_DEPLOYMENT=gpt-4.1-mini
+```
 
 ### 5. Run the app
 
@@ -96,9 +108,12 @@ Open your browser and go to `http://localhost:8000`
 | GET | `/api/trips/{id}` | Get single trip |
 | DELETE | `/api/trips/{id}` | Delete a trip |
 | GET | `/api/trips/{id}/stops` | Get itinerary stops |
+| POST | `/api/trips/{id}/generate` | Generate AI itinerary |
+| POST | `/api/trips/{id}/chat` | Update itinerary via chat |
 
 ## Build Phases
 
 - [x] **Phase 1** — App foundation, database, auth, base HTML pages
-- [ ] **Phase 2** — Microsoft Foundry AI integration, itinerary generation, Leaflet map
-- [ ] **Phase 3** — AI chatbox tweaks, stop editing
+- [x] **Phase 2** — Azure AI Foundry integration, itinerary generation, Leaflet map with colored pins
+- [x] **Phase 3** — AI chat box that updates the itinerary and map in real time
+- [ ] **Phase 4** — Foundry IQ (Azure AI Search grounding)

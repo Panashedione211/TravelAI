@@ -96,34 +96,7 @@
       return;
     }
 
-    // group by day
-    const byDay = {};
-    stops.forEach(s => {
-      if (!byDay[s.day_number]) byDay[s.day_number] = [];
-      byDay[s.day_number].push(s);
-    });
-
-    let html = "";
-    Object.keys(byDay).sort((a, b) => a - b).forEach(day => {
-      const color = DAY_COLORS[(day - 1) % DAY_COLORS.length];
-      html += `<div class="day-group" style="border-left: 4px solid ${color}; padding-left: 10px;"><h3 style="color:${color}">Day ${day}</h3>`;
-      byDay[day].forEach(stop => {
-        html += `
-          <div class="stop-card" onclick="focusStop(${stop.lat}, ${stop.lng})">
-            <div class="stop-number" style="background:${color}">${stop.stop_number}</div>
-            <div class="stop-info">
-              <strong>${stop.name}</strong>
-              <p>${stop.description || ""}</p>
-              ${stop.estimated_cost > 0
-                ? `<small>~$${stop.estimated_cost} per person</small>`
-                : `<small>Free</small>`}
-            </div>
-          </div>`;
-      });
-      html += "</div>";
-    });
-
-    document.getElementById("stop-list").innerHTML = html;
+    renderStopList(stops);
     plotStops(stops);
   }
 
@@ -142,6 +115,7 @@
           iconAnchor: [16, 16],
         }),
       }).addTo(map);
+      activeMarkers.push(marker);
       marker.bindPopup(`
         <strong>${stop.name}</strong><br>
         ${stop.description || ""}<br>
@@ -151,7 +125,7 @@
     });
 
     if (coords.length > 1) {
-      L.polyline(coords, { color: "#2ecc71", weight: 2, dashArray: "6, 8" }).addTo(map);
+      activePolyline = L.polyline(coords, { color: "#2ecc71", weight: 2, dashArray: "6, 8" }).addTo(map);
     }
     if (coords.length > 0) {
       map.fitBounds(coords, { padding: [40, 40] });
@@ -172,6 +146,42 @@
     `;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
+  }
+
+  // track markers and polyline so we can clear them before re-plotting
+  let activeMarkers = [];
+  let activePolyline = null;
+
+  function clearMap() {
+    activeMarkers.forEach(m => map.removeLayer(m));
+    activeMarkers = [];
+    if (activePolyline) { map.removeLayer(activePolyline); activePolyline = null; }
+  }
+
+  function renderStopList(stops) {
+    const byDay = {};
+    stops.forEach(s => {
+      if (!byDay[s.day_number]) byDay[s.day_number] = [];
+      byDay[s.day_number].push(s);
+    });
+    let html = "";
+    Object.keys(byDay).sort((a, b) => a - b).forEach(day => {
+      const color = DAY_COLORS[(day - 1) % DAY_COLORS.length];
+      html += `<div class="day-group" style="border-left:4px solid ${color};padding-left:10px"><h3 style="color:${color}">Day ${day}</h3>`;
+      byDay[day].forEach(stop => {
+        html += `
+          <div class="stop-card" onclick="focusStop(${stop.lat}, ${stop.lng})">
+            <div class="stop-number" style="background:${color}">${stop.stop_number}</div>
+            <div class="stop-info">
+              <strong>${stop.name}</strong>
+              <p>${stop.description || ""}</p>
+              ${stop.estimated_cost > 0 ? `<small>~$${stop.estimated_cost} per person</small>` : `<small>Free</small>`}
+            </div>
+          </div>`;
+      });
+      html += "</div>";
+    });
+    document.getElementById("stop-list").innerHTML = html;
   }
 
   async function sendChat() {
@@ -195,7 +205,10 @@
       thinking.remove();
       if (res.ok) {
         const data = await res.json();
-        addChatMessage(data.reply, "ai");
+        clearMap();
+        renderStopList(data.stops);
+        plotStops(data.stops);
+        addChatMessage("✓ Itinerary updated!", "ai");
       } else {
         addChatMessage("Sorry, something went wrong. Try again.", "ai");
       }

@@ -293,6 +293,15 @@ a:hover { text-decoration: underline; }
   border-color: var(--green-primary);
   color: var(--white);
 }
+.q-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: -8px 0 12px;
+}
+#travel-style-other {
+  margin-top: 12px;
+  width: 100%;
+}
 
 .q-nav {
   display: flex;
