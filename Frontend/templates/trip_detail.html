@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Trip Detail — TravelAI{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+
+{% block content %}
+<div class="trip-detail-wrapper">
+
+  <!-- TOP BAR: trip name and meta info -->
+  <header class="trip-topbar">
+    <a href="/dashboard" class="back-link">← Back</a>
+    <div class="trip-topbar-info">
+      <h1 id="trip-title">Loading...</h1>
+      <div id="trip-meta"></div>
+    </div>
+  </header>
+
+  <!-- MIDDLE: map on left, itinerary detail on right -->
+  <div class="trip-middle">
+
+    <!-- LEFT: map with numbered pins -->
+    <div class="trip-map-panel">
+      <div id="map"></div>
+    </div>
+
+    <!-- RIGHT: itinerary stop list -->
+    <div class="trip-plan-panel">
+      <h2 class="plan-heading">Your Itinerary</h2>
+      <div id="stop-list">
+        <p class="loading-text">Loading your itinerary...</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM: chat box -->
+  <div class="trip-chatbox">
+    <div class="chat-messages" id="chat-messages">
+      <p class="chat-intro">Ask me to tweak your trip — I only talk about this trip.</p>
+    </div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="e.g. swap day 2 lunch for something vegan..." />
+      <button class="btn-primary" id="chat-send">Send</button>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  const token = localStorage.getItem("token");
+  if (!token) window.location.href = "/login";
+
+  const tripId = {{ trip_id }};
+
+  async function authFetch(url, options = {}) {
+    return fetch(url, {
+      ...options,
+      headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
+    });
+  }
+
+  // initialize map
+  const map = L.map("map").setView([20, 0], 2);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors",
+  }).addTo(map);
+
+  async function loadTrip() {
+    const res = await authFetch(`/api/trips/${tripId}`);
+    if (!res.ok) { window.location.href = "/dashboard"; return; }
+    const trip = await res.json();
+
+    document.getElementById("trip-title").textContent = trip.destination;
+    document.getElementById("trip-meta").innerHTML = `
+      <span class="badge">${trip.days} days</span>
+      <span class="badge">${trip.travel_style}</span>
+      <span class="badge">${trip.pace}</span>
+      <span class="badge">${trip.budget}</span>
+      <span class="badge">${trip.group_type}</span>
+    `;
+  }
+
+  async function loadStops() {
+    const res = await authFetch(`/api/trips/${tripId}/stops`);
+    if (!res.ok) return;
+    const stops = await res.json();
+
+    if (stops.length === 0) {
+      document.getElementById("stop-list").innerHTML = "<p class='loading-text'>No stops yet.</p>";
+      return;
+    }
+
+    // group by day
+    const byDay = {};
+    stops.forEach(s => {
+      if (!byDay[s.day_number]) byDay[s.day_number] = [];
+      byDay[s.day_number].push(s);
+    });
+
+    let html = "";
+    Object.keys(byDay).sort((a, b) => a - b).forEach(day => {
+      const color = DAY_COLORS[(day - 1) % DAY_COLORS.length];
+      html += `<div class="day-group" style="border-left: 4px solid ${color}; padding-left: 10px;"><h3 style="color:${color}">Day ${day}</h3>`;
+      byDay[day].forEach(stop => {
+        html += `
+          <div class="stop-card" onclick="focusStop(${stop.lat}, ${stop.lng})">
+            <div class="stop-number" style="background:${color}">${stop.stop_number}</div>
+            <div class="stop-info">
+              <strong>${stop.name}</strong>
+              <p>${stop.description || ""}</p>
+              ${stop.estimated_cost > 0
+                ? `<small>~$${stop.estimated_cost} per person</small>`
+                : `<small>Free</small>`}
+            </div>
+          </div>`;
+      });
+      html += "</div>";
+    });
+
+    document.getElementById("stop-list").innerHTML = html;
+    plotStops(stops);
+  }
+
+  const DAY_COLORS = ["#2ecc71","#3498db","#e67e22","#9b59b6","#e74c3c","#1abc9c","#f39c12","#2980b9"];
+
+  function plotStops(stops) {
+    const coords = [];
+    stops.forEach(stop => {
+      if (!stop.lat || !stop.lng) return;
+      const color = DAY_COLORS[(stop.day_number - 1) % DAY_COLORS.length];
+      const marker = L.marker([stop.lat, stop.lng], {
+        icon: L.divIcon({
+          className: "numbered-marker",
+          html: `<div class="marker-inner" style="background:${color}">${stop.stop_number}</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        }),
+      }).addTo(map);
+      marker.bindPopup(`
+        <strong>${stop.name}</strong><br>
+        ${stop.description || ""}<br>
+        ${stop.estimated_cost > 0 ? `~$${stop.estimated_cost} per person` : "Free"}
+      `);
+      coords.push([stop.lat, stop.lng]);
+    });
+
+    if (coords.length > 1) {
+      L.polyline(coords, { color: "#2ecc71", weight: 2, dashArray: "6, 8" }).addTo(map);
+    }
+    if (coords.length > 0) {
+      map.fitBounds(coords, { padding: [40, 40] });
+    }
+  }
+
+  function focusStop(lat, lng) {
+    map.setView([lat, lng], 14);
+  }
+
+  function addChatMessage(text, type) {
+    const messages = document.getElementById("chat-messages");
+    const div = document.createElement("div");
+    div.className = `chat-msg ${type}`;
+    div.innerHTML = `
+      <span>${text}</span>
+      <button class="chat-delete" onclick="this.parentElement.remove()">✕</button>
+    `;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  async function sendChat() {
+    const input = document.getElementById("chat-input");
+    const msg = input.value.trim();
+    if (!msg) return;
+    addChatMessage(msg, "user");
+    input.value = "";
+
+    const thinking = document.createElement("div");
+    thinking.className = "chat-msg ai thinking";
+    thinking.innerHTML = "<span>Thinking...</span>";
+    document.getElementById("chat-messages").appendChild(thinking);
+
+    try {
+      const res = await authFetch(`/api/trips/${tripId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg }),
+      });
+      thinking.remove();
+      if (res.ok) {
+        const data = await res.json();
+        addChatMessage(data.reply, "ai");
+      } else {
+        addChatMessage("Sorry, something went wrong. Try again.", "ai");
+      }
+    } catch {
+      thinking.remove();
+      addChatMessage("Sorry, something went wrong. Try again.", "ai");
+    }
+  }
+
+  document.getElementById("chat-send").addEventListener("click", sendChat);
+  document.getElementById("chat-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChat();
+  });
+
+  loadTrip();
+  loadStops();
+</script>
+{% endblock %}

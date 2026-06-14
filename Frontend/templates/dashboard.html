@@ -1,9 +1,6 @@
-{% extends "base.html" %}
-{% block title %}Dashboard — TravelAI{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}Dashboard — TravelAI{% endblock %} {%
+block content %}
 <div class="dashboard-wrapper">
-
   <aside class="sidebar">
     <div class="sidebar-brand">TravelAI</div>
     <nav>
@@ -26,11 +23,8 @@
       <a href="/questionnaire" class="btn-primary">Let's start planning</a>
     </section>
   </main>
-
 </div>
-{% endblock %}
-
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script>
   const token = localStorage.getItem("token");
   if (!token) window.location.href = "/login";
@@ -44,23 +38,90 @@
 
   async function loadUser() {
     const res = await authFetch("/api/auth/me");
-    if (!res.ok) { window.location.href = "/login"; return; }
+    if (!res.ok) {
+      window.location.href = "/login";
+      return;
+    }
     const user = await res.json();
-    document.getElementById("greeting").textContent = `Welcome back, ${user.username}!`;
+    document.getElementById("greeting").textContent =
+      `Welcome back, ${user.username}!`;
   }
 
   async function loadTrips() {
+    // fetch all trips for the logged in user
     const res = await authFetch("/api/trips/");
     if (!res.ok) return;
     const trips = await res.json();
     const list = document.getElementById("trip-list");
-    if (trips.length === 0) return;
-    list.innerHTML = trips.map(t => `
-      <li class="trip-item">
+
+    // if no trips yet, show placeholder text
+    if (trips.length === 0) {
+      list.innerHTML = '<li class="trip-item-placeholder">No trips yet</li>';
+      return;
+    }
+
+    // loop through each trip and build a list item for it
+    list.innerHTML = trips
+      .map(
+        (t) => `
+    <li class="trip-item" id="trip-${t.id}">
+
+      <!-- trip name and details -->
+      <a href="/trips/${t.id}">
         <span>${t.destination}</span>
-        <small>${t.days} days · ${t.status}</small>
-      </li>
-    `).join("");
+        <small>${t.days} days · ${t.travel_style}</small>
+      </a>
+
+      <!-- show generate button if pending, view button if already generated -->
+      ${
+        t.status === "pending"
+          ? `
+        <button class="btn-generate" onclick="generateTrip(${t.id})">Generate Itinerary</button>
+      `
+          : `
+        <a href="/trips/${t.id}" class="btn-view">View Trip</a>
+      `
+      }
+
+      <!-- spinner shown while generation is in progress, hidden by default -->
+      <div class="spinner hidden" id="spinner-${t.id}">Generating...</div>
+
+      <!-- delete button — shown on hover -->
+      <button class="btn-delete-trip" onclick="deleteTrip(${t.id})">✕ Delete</button>
+
+    </li>
+  `,
+      )
+      .join("");
+  }
+
+  async function generateTrip(tripId) {
+    // show the spinner and hide the generate button while we wait
+    document.getElementById(`spinner-${tripId}`).classList.remove("hidden");
+    document.querySelector(`#trip-${tripId} .btn-generate`).classList.add("hidden");
+
+    // call the generate endpoint on the backend
+    const res = await authFetch(`/api/trips/${tripId}/generate`, { method: "POST" });
+
+    if (res.ok) {
+      // generation worked — go straight to the trip detail page
+      window.location.href = `/trips/${tripId}`;
+    } else {
+      // something went wrong — hide spinner, show the button again
+      document.getElementById(`spinner-${tripId}`).classList.add("hidden");
+      document.querySelector(`#trip-${tripId} .btn-generate`).classList.remove("hidden");
+      alert("Generation failed. Please try again.");
+    }
+  }
+
+  async function deleteTrip(tripId) {
+    if (!confirm("Delete this trip?")) return;
+    const res = await authFetch(`/api/trips/${tripId}`, { method: "DELETE" });
+    if (res.ok) {
+      document.getElementById(`trip-${tripId}`).remove();
+    } else {
+      alert("Could not delete trip. Try again.");
+    }
   }
 
   document.getElementById("logout-btn").addEventListener("click", () => {

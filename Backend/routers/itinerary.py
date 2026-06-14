@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas
 from auth_utils import get_current_user
-from foundry import generate_itinerary
+from foundry import generate_itinerary, chat_with_trip
 
 router = APIRouter(prefix="/api/trips", tags=["itinerary"])
 
@@ -34,6 +34,8 @@ def generate(
     try:
         stops_data = generate_itinerary(trip)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=502, detail=f"AI generation failed: {str(e)}")
 
     # save each stop to the database
@@ -64,3 +66,37 @@ def generate(
         status="generated",
         stops=saved_stops,
     )
+
+
+# POST /api/trips/{trip_id}/chat
+@router.post("/{trip_id}/chat", response_model=schemas.ChatResponse)
+def chat(
+    trip_id: int,
+    body: schemas.ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    trip = db.query(models.Trip).filter(
+        models.Trip.id == trip_id,
+        models.Trip.user_id == current_user.id,
+    ).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+
+    stops = db.query(models.ItineraryStop).filter(
+        models.ItineraryStop.trip_id == trip_id
+    ).order_by(models.ItineraryStop.day_number, models.ItineraryStop.stop_number).all()
+
+    stops_data = [
+        {"day_number": s.day_number, "stop_number": s.stop_number,
+         "name": s.name, "description": s.description, "estimated_cost": s.estimated_cost or 0}
+        for s in stops
+    ]
+
+    try:
+        reply = chat_with_trip(trip, stops_data, body.message)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=502, detail=f"Chat failed: {str(e)}")
+
+    return schemas.ChatResponse(reply=reply)

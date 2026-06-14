@@ -84,3 +84,10 @@ class GenerateResponse(BaseModel):
     trip_id: int
     status: str
     stops: list[StopOut]
+
+
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    reply: str

@@ -8,7 +8,7 @@ load_dotenv()
 
 FOUNDRY_API_KEY    = os.getenv("FOUNDRY_API_KEY", "")
 FOUNDRY_ENDPOINT   = os.getenv("FOUNDRY_ENDPOINT", "")
-FOUNDRY_DEPLOYMENT = os.getenv("FOUNDRY_DEPLOYMENT", "Phi-4-reasoning")
+FOUNDRY_DEPLOYMENT = os.getenv("FOUNDRY_DEPLOYMENT", "gpt-4.1-mini")
 
 SYSTEM_PROMPT = """You are a travel planning assistant that creates detailed itineraries based on user preferences.
 You will be given a set of user preferences and constraints, and your task is to generate a comprehensive itinerary that includes daily stops with descriptions, locations, and estimated costs.
@@ -61,7 +61,7 @@ def generate_itinerary(trip):
     based on the trip details. if no api key or endpint is set 
     returns a mock itinerary for testing purposes. """
     if not FOUNDRY_API_KEY or not FOUNDRY_ENDPOINT:
-        print("No API key found, using mock itinerary")
+        print("Using mock itinerary")
         return mock_itinerary(trip)
     # api key and endpoint are set, call Foundry to get real itinerary
     headers = {
@@ -78,11 +78,19 @@ def generate_itinerary(trip):
         "temperature": 0.7,
         "max_tokens": 4000,
     }
-    with httpx.Client(timeout=60.0) as client:
-        response = client.post(FOUNDRY_ENDPOINT, headers=headers, json=payload)
+    import time
+    for attempt in range(3):
+        with httpx.Client(timeout=120.0) as client:
+            response = client.post(FOUNDRY_ENDPOINT, headers=headers, json=payload)
+        if response.status_code == 429:
+            wait = 60 * (attempt + 1)
+            print(f"[Foundry] 429 rate limit — waiting {wait}s before retry {attempt + 1}/3")
+            time.sleep(wait)
+            continue
         response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    return parse_foundry_response(content)
+        content = response.json()["choices"][0]["message"]["content"]
+        return parse_foundry_response(content)
+    raise Exception("Rate limit exceeded after 3 retries. Wait a few minutes and try again.")
     
 def mock_itinerary(trip):
     # This is a mock itinerary generator that returns a fixed set of stops for testing purposes.
@@ -107,6 +115,37 @@ def mock_itinerary(trip):
         },
     ]
     
+def chat_with_trip(trip, stops, message):
+    """Send a user message about a specific trip and return the AI reply."""
+    stops_text = "\n".join(
+        f"Day {s['day_number']} Stop {s['stop_number']}: {s['name']} — {s['description']} (~${s['estimated_cost']})"
+        for s in stops
+    )
+    system = f"""You are a travel assistant helping the user adjust their trip to {trip.destination}.
+Here is their current itinerary:
+{stops_text}
+
+Only answer questions or make suggestions related to this trip. Be concise and helpful."""
+
+    headers = {
+        "api-key": FOUNDRY_API_KEY,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": FOUNDRY_DEPLOYMENT,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": message},
+        ],
+        "temperature": 0.7,
+        "max_tokens": 500,
+    }
+    with httpx.Client(timeout=60.0) as client:
+        response = client.post(FOUNDRY_ENDPOINT, headers=headers, json=payload)
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
+
 # parses ai response, extracts JSON, and returns it as a Python list of dicts
 def parse_foundry_response(response_text):
     # This function extracts the JSON array from the Foundry response, even if there is extra text around it.
