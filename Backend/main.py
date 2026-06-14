@@ -3,7 +3,6 @@ from fastapi import FastAPI, Request  # Create the app and get HTTP request info
 from fastapi.middleware.cors import CORSMiddleware  # Let browser pages from other origins talk to this API
 from fastapi.staticfiles import StaticFiles  # Serve static files like CSS and JS to the browser
 from fastapi.templating import Jinja2Templates  # Show HTML pages using Jinja2 templates (Jinja2 lets us use variables and logic in HTML)
-from Backend.routers import itinerary
 from database import engine
 from models import Base
 from routers import auth, trips, itinerary
@@ -66,9 +65,9 @@ def dashboard_page(request: Request):
 def questionnaire_page(request: Request):
     return templates.TemplateResponse("questionnaire.html", {"request": request})
 
-@app.get("/trips/{trip_id}/")
+@app.get("/trips/{trip_id}")
 def trip_details_page(request: Request, trip_id: int):
-    return templates.TemplateResponse("trip_details.html", {"request": request, "trip_id": trip_id})
+    return templates.TemplateResponse("trip_detail.html", {"request": request, "trip_id": trip_id})
 
 
 if __name__ == "__main__":
