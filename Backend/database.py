@@ -18,7 +18,7 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 
+# creates database session for each request
 def get_db():
     db = SessionLocal()
     try:

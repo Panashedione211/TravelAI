@@ -77,3 +77,10 @@ class StopOut(BaseModel):
 
     class Config:
         from_attributes = True
+        
+# ── AI response ───────────────────────────────────────────────────────────
+
+class GenerateResponse(BaseModel):
+    trip_id: int
+    status: str
+    stops: list[StopOut]
