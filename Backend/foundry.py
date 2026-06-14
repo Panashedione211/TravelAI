@@ -44,9 +44,54 @@ Each item must have exactly these fields:
 }"""
 
 
+def geocode_stop(name: str, destination: str):
+    """Look up real coordinates for a stop by searching its name + destination."""
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            r = client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": f"{name}, {destination}", "format": "json", "limit": 1},
+                headers={"User-Agent": "TravelAI/1.0"},
+            )
+        data = r.json()
+        if data:
+            return float(data[0]["lat"]), float(data[0]["lon"])
+    except Exception:
+        pass
+    return None, None
+
+
+def geocode_stops(stops: list, destination: str) -> list:
+    """Replace AI-generated coordinates with real ones from Nominatim."""
+    for stop in stops:
+        lat, lng = geocode_stop(stop.get("name", ""), destination)
+        if lat and lng:
+            stop["lat"] = lat
+            stop["lng"] = lng
+    return stops
+
+
+def get_destination_coords(destination: str):
+    """Look up the approximate lat/lng of a destination using OpenStreetMap Nominatim."""
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            r = client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": destination, "format": "json", "limit": 1},
+                headers={"User-Agent": "TravelAI/1.0"},
+            )
+        data = r.json()
+        if data:
+            return float(data[0]["lat"]), float(data[0]["lon"])
+    except Exception:
+        pass
+    return None, None
+
+
 def build_user_prompt(trip):
-    # This function takes the trip details and formats them into a user prompt that can be sent to Foundry.
-    return f"""Plan a {trip.days}-day trip to {trip.destination}.
+    lat, lng = get_destination_coords(trip.destination)
+    coords_hint = f"\nAll stops must be real places located in or near {trip.destination}." if lat else ""
+    return f"""Plan a {trip.days}-day trip to {trip.destination}.{coords_hint}
 Traveler profile:
 - Budget: {trip.budget}
 - Travel style: {trip.travel_style}
@@ -89,7 +134,8 @@ def generate_itinerary(trip):
             continue
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
-        return parse_foundry_response(content)
+        stops = parse_foundry_response(content)
+        return geocode_stops(stops, trip.destination)
     raise Exception("Rate limit exceeded after 3 retries. Wait a few minutes and try again.")
     
 def mock_itinerary(trip):
@@ -115,17 +161,22 @@ def mock_itinerary(trip):
         },
     ]
     
-def chat_with_trip(trip, stops, message):
-    """Send a user message about a specific trip and return the AI reply."""
-    stops_text = "\n".join(
-        f"Day {s['day_number']} Stop {s['stop_number']}: {s['name']} — {s['description']} (~${s['estimated_cost']})"
-        for s in stops
-    )
-    system = f"""You are a travel assistant helping the user adjust their trip to {trip.destination}.
-Here is their current itinerary:
-{stops_text}
+def chat_update_trip(trip, stops, message):
+    """Takes the user's change request and returns a fully updated stop list as JSON."""
+    stops_json = json.dumps(stops, indent=2)
+    lat, lng = get_destination_coords(trip.destination)
+    coords_hint = f"\nAll stops must be real places located in or near {trip.destination}." if lat else ""
+    system = f"""You are a travel planning assistant. The user has an existing itinerary for a trip to {trip.destination}.{coords_hint}
+They want to make a change to it. Apply their requested change and return the COMPLETE updated itinerary as a JSON array.
 
-Only answer questions or make suggestions related to this trip. Be concise and helpful."""
+Current itinerary:
+{stops_json}
+
+Rules:
+- Return ONLY a valid JSON array, no extra text or markdown
+- Keep all stops that are not affected by the change
+- Each stop must have: day_number, stop_number, name, description, lat, lng, estimated_cost
+- lat/lng must be real coordinates for the location"""
 
     headers = {
         "api-key": FOUNDRY_API_KEY,
@@ -138,19 +189,27 @@ Only answer questions or make suggestions related to this trip. Be concise and h
             {"role": "user", "content": message},
         ],
         "temperature": 0.7,
-        "max_tokens": 500,
+        "max_tokens": 4000,
     }
-    with httpx.Client(timeout=60.0) as client:
+    with httpx.Client(timeout=120.0) as client:
         response = client.post(FOUNDRY_ENDPOINT, headers=headers, json=payload)
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    content = response.json()["choices"][0]["message"]["content"]
+    stops = parse_foundry_response(content)
+    return geocode_stops(stops, trip.destination)
 
 
 # parses ai response, extracts JSON, and returns it as a Python list of dicts
 def parse_foundry_response(response_text):
-    # This function extracts the JSON array from the Foundry response, even if there is extra text around it.
-    json_array_match = re.search(r"\[.*\]", response_text, re.DOTALL)
+    print("[Foundry raw response]", repr(response_text[:500]))
+    # Strip markdown code fences if present
+    text = re.sub(r"```(?:json)?", "", response_text).strip()
+    json_array_match = re.search(r"\[.*\]", text, re.DOTALL)
     if not json_array_match:
         raise ValueError("No JSON array found in Foundry response")
-    return json.loads(json_array_match.group(0))
+    result = json.loads(json_array_match.group(0))
+    print("[Foundry parsed]", type(result), result[:1] if result else [])
+    if not isinstance(result, list) or not all(isinstance(s, dict) for s in result):
+        raise ValueError(f"Foundry response is not a list of stop objects, got: {[type(s) for s in result[:3]]}")
+    return result
 

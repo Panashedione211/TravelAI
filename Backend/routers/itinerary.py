@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas
 from auth_utils import get_current_user
-from foundry import generate_itinerary, chat_with_trip
+from foundry import chat_update_trip, generate_itinerary 
 
 router = APIRouter(prefix="/api/trips", tags=["itinerary"])
 
@@ -69,7 +69,8 @@ def generate(
 
 
 # POST /api/trips/{trip_id}/chat
-@router.post("/{trip_id}/chat", response_model=schemas.ChatResponse)
+# sends current stops + user message to Foundry, replaces all stops with the updated list
+@router.post("/{trip_id}/chat", response_model=schemas.GenerateResponse)
 def chat(
     trip_id: int,
     body: schemas.ChatRequest,
@@ -89,14 +90,45 @@ def chat(
 
     stops_data = [
         {"day_number": s.day_number, "stop_number": s.stop_number,
-         "name": s.name, "description": s.description, "estimated_cost": s.estimated_cost or 0}
+         "name": s.name, "description": s.description, "lat": s.lat, "lng": s.lng,
+         "estimated_cost": s.estimated_cost or 0}
         for s in stops
     ]
 
     try:
-        reply = chat_with_trip(trip, stops_data, body.message)
+        updated_stops_data = chat_update_trip(trip, stops_data, body.message)
     except Exception as e:
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=502, detail=f"Chat failed: {str(e)}")
 
-    return schemas.ChatResponse(reply=reply)
+    # delete all existing stops and replace with the updated list
+    db.query(models.ItineraryStop).filter(
+        models.ItineraryStop.trip_id == trip_id
+    ).delete()
+    db.commit()
+
+    saved_stops = []
+    # save each updated stop to the database
+    for stop in updated_stops_data:
+        db_stop = models.ItineraryStop(
+            trip_id=trip_id,
+            day_number=stop.get("day_number", 1),
+            stop_number=stop.get("stop_number", 1),
+            name=stop.get("name", "Unknown"),
+            description=stop.get("description", ""),
+            lat=stop.get("lat"),
+            lng=stop.get("lng"),
+            estimated_cost=stop.get("estimated_cost", 0.0),
+        )
+        db.add(db_stop)
+        saved_stops.append(db_stop)
+
+    db.commit()
+    for s in saved_stops:
+        db.refresh(s)
+
+    return schemas.GenerateResponse(
+        trip_id=trip_id,
+        status="updated",
+        stops=saved_stops,
+    )
