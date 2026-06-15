@@ -18,6 +18,7 @@ An AI-powered travel planning app that generates personalized itineraries and in
 | Backend | Python, FastAPI |
 | Database | SQLite via SQLAlchemy |
 | AI | Azure AI Foundry (gpt-4.1-mini) |
+| Knowledge Base | Azure AI Search + Wikivoyage API (Foundry IQ) |
 | Maps | Leaflet.js + OpenStreetMap |
 | Geocoding | OpenStreetMap Nominatim |
 | Auth | JWT via python-jose + passlib |
@@ -33,6 +34,7 @@ TravelAI/
 │   ├── schemas.py            # Request/response data shapes
 │   ├── auth_utils.py         # JWT and password hashing
 │   ├── foundry.py            # Azure AI Foundry integration + Nominatim geocoding
+│   ├── search.py             # Azure AI Search + Wikivoyage knowledge base (Foundry IQ)
 │   └── routers/
 │       ├── auth.py           # Register, login, me
 │       ├── trips.py          # Trip CRUD and stops
@@ -86,6 +88,9 @@ SECRET_KEY=your-secret-key
 FOUNDRY_API_KEY=your-azure-api-key
 FOUNDRY_ENDPOINT=https://your-resource.services.ai.azure.com/openai/v1/chat/completions
 FOUNDRY_DEPLOYMENT=gpt-4.1-mini
+AZURE_SEARCH_ENDPOINT=https://your-search.search.windows.net
+AZURE_SEARCH_KEY=your-search-admin-key
+AZURE_SEARCH_INDEX=travelai-guides
 ```
 
 ### 5. Run the app
@@ -116,4 +121,4 @@ Open your browser and go to `http://localhost:8000`
 - [x] **Phase 1** — App foundation, database, auth, base HTML pages
 - [x] **Phase 2** — Azure AI Foundry integration, itinerary generation, Leaflet map with colored pins
 - [x] **Phase 3** — AI chat box that updates the itinerary and map in real time
-- [ ] **Phase 4** — Foundry IQ (Azure AI Search grounding)
+- [x] **Phase 4** — Foundry IQ: Azure AI Search + Wikivoyage knowledge base grounding
