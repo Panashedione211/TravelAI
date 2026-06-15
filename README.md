@@ -2,6 +2,10 @@
 
 An AI-powered travel planning app that generates personalized itineraries and interactive maps based on your travel preferences. Built for a Microsoft hackathon using Azure AI Foundry.
 
+## Demo Video
+
+▶️ [Watch the demo on YouTube](https://youtu.be/HquClLOQOqQ)
+
 ## How It Works
 
 1. Sign up and log in
@@ -51,6 +55,38 @@ TravelAI/
 │       ├── questionnaire.html
 │       └── trip_detail.html  # Map + itinerary + chat
 └── .gitignore
+```
+
+## Architecture
+
+```
+User (Browser)
+    │
+    ▼
+FastAPI Backend
+    ├── routers/auth.py       — JWT login/register
+    ├── routers/trips.py      — Trip CRUD + stops
+    ├── routers/itinerary.py  — Generate + chat endpoints
+    ├── search.py             ──────────────────────────────┐
+    │       │                                               │
+    │       ▼                                               ▼
+    │  Wikivoyage API                            Azure AI Search
+    │  (free travel guides)          ◄──────     (Foundry IQ index)
+    │                                            travelai-guides
+    └── foundry.py
+            │  (injects Wikivoyage context)
+            ▼
+     Azure AI Foundry
+     gpt-4.1-mini
+     (generates JSON itinerary)
+            │
+            ▼
+     Nominatim (OpenStreetMap)
+     (real GPS coordinates per stop)
+            │
+            ▼
+     Leaflet.js Map
+     (color-coded pins per day)
 ```
 
 ## Getting Started
