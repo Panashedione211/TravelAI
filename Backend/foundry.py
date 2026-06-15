@@ -3,6 +3,7 @@ import json
 import re
 import httpx
 from dotenv import load_dotenv
+from search import search_destination
 
 load_dotenv()
 
@@ -91,7 +92,9 @@ def get_destination_coords(destination: str):
 def build_user_prompt(trip):
     lat, lng = get_destination_coords(trip.destination)
     coords_hint = f"\nAll stops must be real places located in or near {trip.destination}." if lat else ""
-    return f"""Plan a {trip.days}-day trip to {trip.destination}.{coords_hint}
+    guide = search_destination(trip.destination, trip.travel_style)
+    guide_section = f"\n\nLocal travel guide context (use this to suggest real places):\n{guide}" if guide else ""
+    return f"""Plan a {trip.days}-day trip to {trip.destination}.{coords_hint}{guide_section}
 Traveler profile:
 - Budget: {trip.budget}
 - Travel style: {trip.travel_style}
@@ -166,7 +169,9 @@ def chat_update_trip(trip, stops, message):
     stops_json = json.dumps(stops, indent=2)
     lat, lng = get_destination_coords(trip.destination)
     coords_hint = f"\nAll stops must be real places located in or near {trip.destination}." if lat else ""
-    system = f"""You are a travel planning assistant. The user has an existing itinerary for a trip to {trip.destination}.{coords_hint}
+    guide = search_destination(trip.destination, "attractions restaurants activities")
+    guide_section = f"\n\nLocal travel guide context (use this to suggest real places):\n{guide}" if guide else ""
+    system = f"""You are a travel planning assistant. The user has an existing itinerary for a trip to {trip.destination}.{coords_hint}{guide_section}
 They want to make a change to it. Apply their requested change and return the COMPLETE updated itinerary as a JSON array.
 
 Current itinerary:
@@ -201,15 +206,13 @@ Rules:
 
 # parses ai response, extracts JSON, and returns it as a Python list of dicts
 def parse_foundry_response(response_text):
-    print("[Foundry raw response]", repr(response_text[:500]))
     # Strip markdown code fences if present
     text = re.sub(r"```(?:json)?", "", response_text).strip()
     json_array_match = re.search(r"\[.*\]", text, re.DOTALL)
     if not json_array_match:
         raise ValueError("No JSON array found in Foundry response")
     result = json.loads(json_array_match.group(0))
-    print("[Foundry parsed]", type(result), result[:1] if result else [])
     if not isinstance(result, list) or not all(isinstance(s, dict) for s in result):
-        raise ValueError(f"Foundry response is not a list of stop objects, got: {[type(s) for s in result[:3]]}")
+        raise ValueError(f"Foundry response is not a list of stop objects")
     return result
 

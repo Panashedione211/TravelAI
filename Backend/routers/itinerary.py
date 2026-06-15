@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas
 from auth_utils import get_current_user
-from foundry import chat_update_trip, generate_itinerary 
+from foundry import chat_update_trip, generate_itinerary
+from search import index_destination
 
 router = APIRouter(prefix="/api/trips", tags=["itinerary"])
 
@@ -29,6 +30,9 @@ def generate(
         models.ItineraryStop.trip_id == trip_id
     ).delete()
     db.commit()
+
+    # index the destination in Azure AI Search so Foundry has grounding context
+    index_destination(trip.destination)
 
     # call Foundry (or mock) to get the itinerary
     try:
