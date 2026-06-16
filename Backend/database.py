@@ -11,10 +11,15 @@ endpoints to provide a database session that is properly closed after the reques
 # database connection string, it can be set in the .env file or it defaults to a local SQLite database file named travelai.db in the current directory.
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./travelai.db")
 
-# sets up databases connection and session management, it creates a SQLAlchemy engine and a session factory that can be used to interact with the database in the API endpoints.
+# Railway provides postgres:// but SQLAlchemy requires postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+is_sqlite = DATABASE_URL.startswith("sqlite")
+
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},  # required for SQLite
+    connect_args={"check_same_thread": False} if is_sqlite else {},
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
