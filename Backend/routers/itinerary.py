@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas
@@ -12,7 +16,9 @@ router = APIRouter(prefix="/api/trips", tags=["itinerary"])
 # POST /api/trips/{trip_id}/generate
 # calls Foundry AI, saves stops to DB, updates trip status to "generated"
 @router.post("/{trip_id}/generate", response_model=schemas.GenerateResponse)
+@limiter.limit("5/hour")
 def generate(
+    request: Request,
     trip_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -75,7 +81,9 @@ def generate(
 # POST /api/trips/{trip_id}/chat
 # sends current stops + user message to Foundry, replaces all stops with the updated list
 @router.post("/{trip_id}/chat", response_model=schemas.GenerateResponse)
+@limiter.limit("10/hour")
 def chat(
+    request: Request,
     trip_id: int,
     body: schemas.ChatRequest,
     db: Session = Depends(get_db),

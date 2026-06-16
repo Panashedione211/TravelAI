@@ -6,13 +6,21 @@ from fastapi.templating import Jinja2Templates  # Show HTML pages using Jinja2 t
 from database import engine
 from models import Base
 from routers import auth, trips, itinerary
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
 
 # create database tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
+# rate limiter — tracks by IP address
+limiter = Limiter(key_func=get_remote_address)
+
 # starts the web application
 app = FastAPI(title="TravelAI API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware to allow frontend to call this API
 # Cors = Cross-origin resource sharing, it controls whether a web page from one site can request data from another 
